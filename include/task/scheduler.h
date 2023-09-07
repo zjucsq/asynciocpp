@@ -52,12 +52,22 @@ class Scheduler {
 
   // TODO：条件变量是否应该使用while防止虚假唤醒
   void run_loop() {
-    while (is_active.load(std::memory_order_relaxed) || !is_queue_empty()) {
+    // while (is_active.load(std::memory_order_relaxed) || !is_queue_empty()) {
+    //   std::unique_lock lock(queue_lock);
+    //   if (executable_queue.empty()) {
+    //     queue_condition.wait(lock);
+    //     if (executable_queue.empty()) {
+    //       continue;
+    //     }
+    //   }
+    while (true) {
       std::unique_lock lock(queue_lock);
+      queue_condition.wait(lock, [this]() { return !is_active.load(std::memory_order_seq_cst) || !executable_queue.empty(); });
       if (executable_queue.empty()) {
-        queue_condition.wait(lock);
-        if (executable_queue.empty()) {
+        if (is_active.load(std::memory_order_seq_cst)) {
           continue;
+        } else {
+          break;
         }
       }
 
@@ -78,7 +88,7 @@ class Scheduler {
 
  public:
   Scheduler() {
-    is_active.store(true, std::memory_order_relaxed);
+    is_active.store(true, std::memory_order_seq_cst);
     work_thread = std::thread(&Scheduler::run_loop, this);
   }
 
@@ -93,7 +103,7 @@ class Scheduler {
   void execute(std::function<void()> &&func, long long delay) {
     delay = std::max(0ll, delay);
     std::unique_lock lock(queue_lock);
-    if (is_active.load(std::memory_order_relaxed)) {
+    if (is_active.load(std::memory_order_seq_cst)) {
       bool need_notify = executable_queue.empty() || executable_queue.top().delay() > delay;
       executable_queue.push(DelayedExecutable{std::move(func), delay});
       lock.unlock();
@@ -104,7 +114,7 @@ class Scheduler {
   }
 
   void shutdown(bool wait_for_complete = true) {
-    is_active.store(false, std::memory_order_relaxed);
+    is_active.store(false, std::memory_order_seq_cst);
     if (!wait_for_complete) {
       std::lock_guard lock(queue_lock);
       decltype(executable_queue) empty_queue;
