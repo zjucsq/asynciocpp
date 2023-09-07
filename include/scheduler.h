@@ -9,8 +9,10 @@
 #include <queue>
 #include <thread>
 
+#include "io_utils.h"
+
 class DelayedExecutable {
-public:
+ public:
   DelayedExecutable(std::function<void()> &&func, long long delay) : func_(std::move(func)) {
     using namespace std::chrono;
     auto now = system_clock::now();
@@ -30,7 +32,7 @@ public:
 
   bool operator<(const DelayedExecutable &rhs) const { return scheduled_time_ > rhs.get_scheduled_time(); }
 
-private:
+ private:
   long long scheduled_time_;
   std::function<void()> func_;
 };
@@ -43,8 +45,14 @@ class Scheduler {
   std::atomic_bool is_active;
   std::thread work_thread;
 
+  bool is_queue_empty() {
+    std::lock_guard lock(queue_lock);
+    return executable_queue.empty();
+  }
+
+  // TODO：条件变量是否应该使用while防止虚假唤醒
   void run_loop() {
-    while (is_active.load(std::memory_order_relaxed) || !executable_queue.empty()) {
+    while (is_active.load(std::memory_order_relaxed) || !is_queue_empty()) {
       std::unique_lock lock(queue_lock);
       if (executable_queue.empty()) {
         queue_condition.wait(lock);
@@ -68,17 +76,20 @@ class Scheduler {
     debug("scheduler exit.");
   }
 
-public:
+ public:
   Scheduler() {
     is_active.store(true, std::memory_order_relaxed);
     work_thread = std::thread(&Scheduler::run_loop, this);
   }
 
   ~Scheduler() {
+    debug("destroy scheduler start.");
     shutdown(false);
     join();
+    debug("destroy scheduler finish.");
   }
 
+  // TODO：notify之前是否应该持有锁
   void execute(std::function<void()> &&func, long long delay) {
     delay = std::max(0ll, delay);
     std::unique_lock lock(queue_lock);
@@ -86,8 +97,9 @@ public:
       bool need_notify = executable_queue.empty() || executable_queue.top().delay() > delay;
       executable_queue.push(DelayedExecutable{std::move(func), delay});
       lock.unlock();
-      if (need_notify)
+      if (need_notify) {
         queue_condition.notify_one();
+      }
     }
   }
 

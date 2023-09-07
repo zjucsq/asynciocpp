@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(cpp20)
 
-set (CMAKE_C_COMPILER "gcc")
-set (CMAKE_CXX_COMPILER "g++")
+set (CMAKE_C_COMPILER "/usr/bin/gcc")
+set (CMAKE_CXX_COMPILER "/usr/bin/g++")
 
 # if(APPLE)
 #     set(CMAKE_C_COMPILER "/Users/csq/anaconda3/envs/g++/bin/clang")
@@ -14,7 +14,11 @@ set(BUILD_SHARED_LIBS OFF)              # We expect external libraries to be lin
 set(CMAKE_CXX_STANDARD 20)              # Compile as C++20.
 set(CMAKE_CXX_STANDARD_REQUIRED ON)     # Require C++20 support.
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -g")
+SET(CMAKE_BUILD_TYPE "Debug")
+# SET(CMAKE_BUILD_TYPE "Release")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fno-omit-frame-pointer -g")
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=thread")
+set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=thread")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -27,6 +31,7 @@ foreach(file ${CPP_FILES})
     if (NOT ${filename} IN_LIST NOT_COMPILE)
         add_executable(${filename} ${file})
         message("add ${filename}")
+        target_link_libraries(${filename} PRIVATE pthread)
     endif()
 endforeach()
 

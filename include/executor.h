@@ -11,27 +11,27 @@
 #include "io_utils.h"
 
 class AbstractExecutor {
-public:
+ public:
   virtual void execute(std::function<void()> &&func) = 0;
 };
 
 class NoopExecutor : public AbstractExecutor {
-public:
+ public:
   void execute(std::function<void()> &&func) override { func(); }
 };
 
 class NewThreadExecutor : public AbstractExecutor {
-public:
+ public:
   void execute(std::function<void()> &&func) override { std::thread(func).detach(); }
 };
 
 class AsyncExecutor : public AbstractExecutor {
-public:
+ public:
   void execute(std::function<void()> &&func) override { auto future = std::async(func); }
 };
 
 class LooperExecutor : public AbstractExecutor {
-private:
+ private:
   std::condition_variable queue_condition;
   std::mutex queue_lock;
   std::queue<std::function<void()>> executable_queue;
@@ -39,13 +39,28 @@ private:
   std::atomic_bool is_active;
   std::thread work_thread;
 
+  bool is_queue_empty() {
+    std::lock_guard lock(queue_lock);
+    return executable_queue.empty();
+  }
+
   void run_loop() {
-    while (is_active.load(std::memory_order_relaxed) || !executable_queue.empty()) {
+    // while (is_active.load(std::memory_order_relaxed) || !is_queue_empty()) {
+    //   std::unique_lock lock(queue_lock);
+    //   if (executable_queue.empty()) {
+    //     queue_condition.wait(lock);
+    //     if (executable_queue.empty()) {
+    //       continue;
+    //     }
+    //   }
+    while (true) {
       std::unique_lock lock(queue_lock);
+      queue_condition.wait(lock, [this]() { return !is_active.load(std::memory_order_relaxed) || !executable_queue.empty(); });
       if (executable_queue.empty()) {
-        queue_condition.wait(lock);
-        if (executable_queue.empty()) {
+        if (is_active.load(std::memory_order_relaxed)) {
           continue;
+        } else {
+          break;
         }
       }
 
@@ -57,7 +72,7 @@ private:
     debug("LooperExecutor exit.");
   }
 
-public:
+ public:
   LooperExecutor() {
     is_active.store(true, std::memory_order_relaxed);
     work_thread = std::thread(&LooperExecutor::run_loop, this);
@@ -95,7 +110,7 @@ public:
 };
 
 class SharedLooperExecutor : public AbstractExecutor {
-public:
+ public:
   void execute(std::function<void()> &&func) override {
     static LooperExecutor sharedLooperExecutor;
     sharedLooperExecutor.execute(std::move(func));

@@ -7,7 +7,8 @@ struct NoResultError : std::exception {
   [[nodiscard]] const char *what() const noexcept override { return "result is unset"; }
 };
 
-template <typename T> struct Result {
+template <typename T>
+struct Result {
   explicit Result() = default;
 
   explicit Result(T &&value) : result_(value){};
@@ -24,11 +25,12 @@ template <typename T> struct Result {
     throw NoResultError{};
   }
 
-private:
+ private:
   std::variant<std::monostate, T, std::exception_ptr> result_;
 };
 
-template <> struct Result<void> {
+template <>
+struct Result<void> {
   explicit Result() = default;
 
   explicit Result(std::exception_ptr &&exception_ptr) : _exception_ptr(exception_ptr) {}
@@ -39,6 +41,6 @@ template <> struct Result<void> {
     }
   }
 
-private:
+ private:
   std::exception_ptr _exception_ptr;
 };

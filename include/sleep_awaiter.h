@@ -18,7 +18,7 @@ struct SleepAwaiter {
 
   void await_resume() {}
 
-private:
+ private:
   AbstractExecutor *executor_;
   long long duration_;
 };

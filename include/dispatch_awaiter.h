@@ -15,6 +15,6 @@ struct DispatchAwaiter {
 
   void await_resume() {}
 
-private:
+ private:
   AbstractExecutor *executor_;
 };
